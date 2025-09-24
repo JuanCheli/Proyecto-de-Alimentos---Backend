@@ -20,12 +20,20 @@ def get_by_codigo(codigo: int):
     return resp.data[0]
 
 
+def get_by_codigos(codigos: List[int]) -> List[dict]:
+    """
+    Devuelve todos los alimentos cuyo codigomex2 esté en la lista `codigos`.
+    """
+    if not codigos:
+        return []
+
+    resp = supabase.table(TABLE).select("*").in_("codigomex2", codigos).execute()
+    return resp.data or []
 
 
 def insert_alimento(obj: dict) -> dict:
     resp = supabase.table(TABLE).insert(obj).execute()
     return resp.data[0] if resp.data else None
-
 
 
 def search_alimentos(filters: Dict[str, Any], limit: int = 100, offset: int = 0) -> List[dict]:
