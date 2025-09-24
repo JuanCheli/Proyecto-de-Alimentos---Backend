@@ -1,6 +1,8 @@
 import re
 import logging
 from typing import Optional, Dict, Any, List
+import asyncio
+import functools
 from api.db.sql import execute_sql
 from api.config import settings
 
@@ -190,7 +192,7 @@ def ask_llm_and_execute(question: str, max_results: Optional[int] = 10) -> List[
         logger.info("Generating SQL for question: %.100s", question)
         sql = translate_question_to_sql_with_llm(question, max_results=max_results, timeout=30)
         
-        # Paso 2: Ejecutar SQL
+        # Paso 2: Ejecutar SQL inmediatamente (con conexión fresca)
         logger.info("Executing SQL: %.200s", sql)
         rows = execute_sql(sql)
         
