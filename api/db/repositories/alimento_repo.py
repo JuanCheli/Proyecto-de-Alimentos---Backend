@@ -9,9 +9,17 @@ def get_all(limit: int = 100, offset: int = 0) -> List[dict]:
     return resp.data or []
 
 
-def get_by_codigo(codigo: int) -> Optional[dict]:
-    resp = supabase.table(TABLE).select("*").eq("codigomex2", codigo).maybe_single().execute()
-    return resp.data  # dict o None
+def get_by_codigo(codigo: int):
+    resp = supabase.table(TABLE).select("*").eq("codigomex2", codigo).limit(1).execute()
+
+    # Si no hay filas
+    if not resp.data or len(resp.data) == 0:
+        return None
+
+    # Si encuentra 1 fila
+    return resp.data[0]
+
+
 
 
 def insert_alimento(obj: dict) -> dict:

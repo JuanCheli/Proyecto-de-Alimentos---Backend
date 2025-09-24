@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_KEY: Optional[str] = Field(None, env="SUPABASE_SERVICE_KEY")
     SUPABASE_JWT_SECRET: Optional[str] = Field(None, env="SUPABASE_JWT_SECRET")
 
+    # Connection String para ejecutar querys directo en base a las querys hechas por el LLM
+    DATABASE_URL: Optional[str] = Field(None, env="DATABASE_URL")
+
     # Timeout
     REQUEST_TIMEOUT: int = Field(30, env="REQUEST_TIMEOUT")
 

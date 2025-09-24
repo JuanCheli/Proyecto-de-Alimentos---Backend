@@ -35,7 +35,7 @@ class AlimentoBase(BaseModel):
 
 # --- Para creación ---
 class AlimentoCreate(AlimentoBase):
-    pass  # codigomex2 se genera automáticamente
+    pass
 
 # --- Para lectura ---
 class AlimentoRead(AlimentoBase):
