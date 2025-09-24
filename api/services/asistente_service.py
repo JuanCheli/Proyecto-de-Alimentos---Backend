@@ -5,7 +5,6 @@ from api.db.sql import execute_sql
 from api.config import settings
 
 logger = logging.getLogger("asistente")
-logger.addHandler(logging.NullHandler())
 
 # Excepciones específicas
 class LLMError(Exception):
@@ -15,6 +14,9 @@ class SQLValidationError(Exception):
     pass
 
 class ExecutionError(Exception):
+    pass
+
+class TimeoutError(Exception):
     pass
 
 # Lista blanca de columnas (tu modelo SQLAlchemy)
@@ -32,7 +34,6 @@ FORBIDDEN_KEYWORDS = {
 }
 
 SELECT_FROM_REGEX = re.compile(r"(?is)^\s*select\b.*\bfrom\s+alimentos\b.*$")
-IDENTIFIER_REGEX = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 def _extract_sql_from_text(text: str) -> Optional[str]:
     txt = text.strip()
@@ -78,19 +79,22 @@ def _validate_sql(sql: str) -> Optional[str]:
 
     return sql_str
 
-def translate_question_to_sql_with_llm(question: str, model: str = "gemini-2.5-flash", max_results: Optional[int] = 10) -> str:
+def translate_question_to_sql_with_llm(question: str, model: str = "gemini-2.5-flash", max_results: Optional[int] = 10, timeout: int = 30) -> str:
+    """
+    Traduce pregunta a SQL con timeout.
+    """
     try:
         max_results = None if max_results is None else int(max_results)
     except Exception:
         max_results = 10
     if max_results is not None:
-        max_results = max(1, min(500, max_results))  # capear entre 1 y 500
+        max_results = max(1, min(500, max_results))
 
     try:
         from google import genai
     except Exception as e:
         logger.exception("genai import failed")
-        raise LLMError("La librería genai no está disponible. Instalá e importá correctamente.") from e
+        raise LLMError("La librería genai no está disponible.") from e
 
     client = genai.Client(api_key=settings.GENAI_API_KEY)
 
@@ -104,7 +108,7 @@ def translate_question_to_sql_with_llm(question: str, model: str = "gemini-2.5-f
       - Columnas permitidas: {sorted(list(ALLOWED_COLUMNS))}
       - Si el usuario pide ranking (ej: "¿Qué alimento tiene más hierro?") devolvé ORDER BY iron DESC LIMIT 1.
       - Si el usuario pide "menos de 300 kcal" usá energ_kcal <= 300.
-      - Si no mencionás columnas, devolvé columnas útiles: codigomex2, nombre_del_alimento, energ_kcal, protein, lipid_tot.
+      - Si no mencionás columnas, devolvé todas las columnas (SELECT *).
       - Respetá el parámetro max_results sugerido: {max_results}
     Ejemplos:
       Entrada: "Dame alimentos altos en proteína y bajos en grasa"
@@ -117,10 +121,46 @@ def translate_question_to_sql_with_llm(question: str, model: str = "gemini-2.5-f
     """
 
     try:
-        response = client.models.generate_content(model=model, contents=prompt)
+        # Implementar timeout para la llamada al LLM
+        def call_llm():
+            return client.models.generate_content(model=model, contents=prompt)
+        
+        # Usar threading para timeout (si no tienes asyncio disponible)
+        import threading
+        import queue
+        
+        result_queue = queue.Queue()
+        exception_queue = queue.Queue()
+        
+        def worker():
+            try:
+                result = call_llm()
+                result_queue.put(result)
+            except Exception as e:
+                exception_queue.put(e)
+        
+        thread = threading.Thread(target=worker)
+        thread.daemon = True
+        thread.start()
+        thread.join(timeout=timeout)
+        
+        if thread.is_alive():
+            logger.error("LLM call timed out")
+            raise TimeoutError(f"El LLM tardó más de {timeout} segundos en responder")
+        
+        if not exception_queue.empty():
+            raise exception_queue.get()
+        
+        if result_queue.empty():
+            raise LLMError("No se recibió respuesta del LLM")
+        
+        response = result_queue.get()
+        
+    except TimeoutError:
+        raise
     except Exception as e:
         logger.exception("Error llamando al LLM")
-        raise LLMError("Error llamando al LLM (genai). Verificá credenciales y conexión.") from e
+        raise LLMError(f"Error llamando al LLM: {str(e)}") from e
 
     text = getattr(response, "text", None) or str(response)
     logger.debug("LLM raw response: %s", text)
@@ -142,14 +182,24 @@ def translate_question_to_sql_with_llm(question: str, model: str = "gemini-2.5-f
 
 def ask_llm_and_execute(question: str, max_results: Optional[int] = 10) -> List[Dict[str, Any]]:
     """
-    pide SQL al LLM, valida, ejecuta y devuelve resultados (lista de dicts).
-    Lanza LLMError / SQLValidationError / ExecutionError según corresponda.
+    Pide SQL al LLM, valida, ejecuta y devuelve resultados.
+    Con mejor manejo de errores y timeouts.
     """
-    sql = translate_question_to_sql_with_llm(question, max_results=max_results)
-    logger.info("Executing SQL from LLM (truncated): %.200s", sql)
     try:
-        rows = execute_sql(sql)  # execute_sql debe lanzar RuntimeError/Exception en fallos
+        # Paso 1: Generar SQL con timeout
+        logger.info("Generating SQL for question: %.100s", question)
+        sql = translate_question_to_sql_with_llm(question, max_results=max_results, timeout=30)
+        
+        # Paso 2: Ejecutar SQL
+        logger.info("Executing SQL: %.200s", sql)
+        rows = execute_sql(sql)
+        
+        logger.info("Query executed successfully, returned %d rows", len(rows))
+        return rows
+        
+    except (LLMError, SQLValidationError, TimeoutError) as e:
+        # Re-raise errores específicos sin modificar
+        raise
     except Exception as e:
-        logger.exception("Error ejecutando SQL")
-        raise ExecutionError("Error al ejecutar la consulta generada.") from e
-    return rows
+        logger.exception("Unexpected error in ask_llm_and_execute")
+        raise ExecutionError(f"Error inesperado: {str(e)}") from e
