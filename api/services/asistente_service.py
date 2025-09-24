@@ -38,14 +38,26 @@ FORBIDDEN_KEYWORDS = {
 SELECT_FROM_REGEX = re.compile(r"(?is)^\s*select\b.*\bfrom\s+alimentos\b.*$")
 
 def _extract_sql_from_text(text: str) -> Optional[str]:
+    """
+    Extrae la primera sentencia SELECT válida de un texto generado por LLM.
+    Limpia comillas triples y backticks que puedan generar errores en Postgres.
+    """
     txt = text.strip()
     m = re.search(r"(?i)\bselect\b", txt)
     if not m:
         return None
     start = m.start()
     first_chunk = txt[start:]
+    
+    # Cortar en el primer ; si existe
     if ";" in first_chunk:
         first_chunk = first_chunk.split(";", 1)[0]
+
+    # Limpiar backticks y comillas que vienen del LLM
+    first_chunk = first_chunk.strip()
+    first_chunk = first_chunk.replace("```", "")
+    first_chunk = first_chunk.strip("`").strip('"').strip("'")
+    
     return first_chunk.strip()
 
 def _contains_forbidden_keyword(sql: str) -> bool:
@@ -83,7 +95,7 @@ def _validate_sql(sql: str) -> Optional[str]:
 
 def translate_question_to_sql_with_llm(question: str, model: str = "gemini-2.5-flash", max_results: Optional[int] = 10, timeout: int = 30) -> str:
     """
-    Traduce pregunta a SQL con timeout.
+    Traduce pregunta a SQL con timeout, validando la salida y asegurando que no queden comillas/backticks.
     """
     try:
         max_results = None if max_results is None else int(max_results)
@@ -123,41 +135,36 @@ def translate_question_to_sql_with_llm(question: str, model: str = "gemini-2.5-f
     """
 
     try:
-        # Implementar timeout para la llamada al LLM
-        def call_llm():
-            return client.models.generate_content(model=model, contents=prompt)
-        
-        # Usar threading para timeout (si no tienes asyncio disponible)
         import threading
         import queue
-        
+
         result_queue = queue.Queue()
         exception_queue = queue.Queue()
-        
+
         def worker():
             try:
-                result = call_llm()
+                result = client.models.generate_content(model=model, contents=prompt)
                 result_queue.put(result)
             except Exception as e:
                 exception_queue.put(e)
-        
+
         thread = threading.Thread(target=worker)
         thread.daemon = True
         thread.start()
         thread.join(timeout=timeout)
-        
+
         if thread.is_alive():
             logger.error("LLM call timed out")
             raise TimeoutError(f"El LLM tardó más de {timeout} segundos en responder")
-        
+
         if not exception_queue.empty():
             raise exception_queue.get()
-        
+
         if result_queue.empty():
             raise LLMError("No se recibió respuesta del LLM")
-        
+
         response = result_queue.get()
-        
+
     except TimeoutError:
         raise
     except Exception as e:
@@ -180,6 +187,7 @@ def translate_question_to_sql_with_llm(question: str, model: str = "gemini-2.5-f
         if not re.search(r"\blimit\b\s+\d+", validated, flags=re.IGNORECASE):
             validated = validated.rstrip() + f" LIMIT {int(max_results)}"
 
+    logger.info("SQL final validado a ejecutar: %s", repr(validated))
     return validated
 
 def ask_llm_and_execute(question: str, max_results: Optional[int] = 10) -> List[Dict[str, Any]]:
