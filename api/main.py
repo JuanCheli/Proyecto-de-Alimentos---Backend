@@ -1,10 +1,11 @@
 """
 Main.py de la API
 Incluye:
-- Registro de routers (routes/alimentos.py)
+- Registro de routers (routes/alimentos.py y routes/asistente_ia.py)
 - Handler para errores de RuntimeError (por ejemplo errores de DB lanzados en repo)
 - Endpoint /health que comprueba la conexión básica a la DB (para debug, principalmente)
 - Configuración básica de CORS
+- Log de rutas al startup (dev)
 """
 
 import os
@@ -17,6 +18,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # routers
 from api.routes.alimentos import router as alimentos_router
+
+# intentar importar el router del asistente de forma segura (no romper startup si falla)
+asistente_router = None
+try:
+    from api.routes.asistente_ia import router as asistente_router  # optional
+except Exception as e:
+    # no hacemos raise; lo registramos y el endpoint /ask no se montará
+    logging.getLogger("api").warning("No se pudo importar api.routes.asistente_ia: %s", e)
+    asistente_router = None
 
 # repo para healthcheck
 from api.db.repositories.alimento_repo import get_all as repo_get_all
@@ -57,6 +67,11 @@ app.add_middleware(
 # - POST /alimento
 app.include_router(alimentos_router)
 
+# incluir el router del asistente si se importó correctamente
+if asistente_router is not None:
+    app.include_router(asistente_router, prefix="")
+else:
+    logger.warning("Router 'asistente_ia' no incluido (import falló o no existe).")
 
 # Handler global para RuntimeError (p. ej. errores lanzados por el repo/cliente Supabase)
 @app.exception_handler(RuntimeError)
@@ -95,5 +110,14 @@ def health():
         )
 
 
-
-# RUNEAR CON UVICORN
+# Mostrar rutas registradas al arrancar por razones de debug
+@app.on_event("startup")
+def log_registered_routes():
+    try:
+        for r in app.routes:
+            methods = ",".join(getattr(r, "methods", []))
+            # endpoint puede ser Callable u objeto; mostramos su nombre si existe
+            endpoint_name = getattr(r.endpoint, "__name__", r.endpoint.__class__.__name__ if hasattr(r.endpoint, "__class__") else str(r.endpoint))
+            logger.info("Route: %s %s -> %s", methods, r.path, endpoint_name)
+    except Exception:
+        logger.exception("Error listando rutas al startup")

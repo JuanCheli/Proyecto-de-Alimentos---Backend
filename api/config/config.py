@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # Timeout
     REQUEST_TIMEOUT: int = Field(30, env="REQUEST_TIMEOUT")
 
+    # API Key de Google GenAI
+    GENAI_API_KEY: Optional[str] = Field(None, env="GENAI_API_KEY")
+
     # Configuración de pydantic-settings
     model_config = SettingsConfigDict(
         env_file=".env",
