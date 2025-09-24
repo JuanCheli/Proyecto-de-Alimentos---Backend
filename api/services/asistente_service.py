@@ -120,7 +120,8 @@ def translate_question_to_sql_with_llm(question: str, model: str = "gemini-2.5-f
       - Permitidos: SELECT, FROM, WHERE, ORDER BY, GROUP BY, HAVING, LIMIT.
       - Prohibido: DROP, DELETE, UPDATE, INSERT, ALTER, TRUNCATE, CREATE, etc.
       - Columnas permitidas: {sorted(list(ALLOWED_COLUMNS))}
-      - Si el usuario pide ranking (ej: "¿Qué alimento tiene más hierro?") devolvé ORDER BY iron DESC LIMIT 1.
+      - Si el usuario pide ranking (ej: "¿Qué alimento tiene más hierro?") devolvé ORDER BY iron DESC LIMIT 1, 
+        **excluyendo los valores nulos con WHERE iron IS NOT NULL.**
       - Si el usuario pide "menos de 300 kcal" usá energ_kcal <= 300.
       - Si no mencionás columnas, devolvé todas las columnas (SELECT *).
       - Respetá el parámetro max_results sugerido: {max_results}
