@@ -121,6 +121,7 @@ uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 ## Alimentos
 - GET /alimentos → Listado de alimentos con paginación.
 - GET /alimento/{codigo} → Obtener alimento por código.
+- GET /buscar_alimento → Buscar alimentos por coincidencia parcial en el nombre.
 - POST /buscar → Buscar alimentos por filtros.
 - POST /alimento → Insertar un nuevo alimento.
 
