@@ -116,24 +116,24 @@ def translate_question_to_sql_with_llm(question: str, model: str = "gemini-2.5-f
     Eres un traductor de lenguaje natural a SQL para una tabla Postgres llamada `alimentos`.
     DEVOLVÉ SOLO UNA SENTENCIA SQL válida (SELECT ... FROM alimentos ...), sin texto adicional.
     Reglas estrictas:
-      - Usá sólo la tabla `alimentos`.
-      - Permitidos: SELECT, FROM, WHERE, ORDER BY, GROUP BY, HAVING, LIMIT.
-      - Prohibido: DROP, DELETE, UPDATE, INSERT, ALTER, TRUNCATE, CREATE, etc.
-      - Columnas permitidas: {sorted(list(ALLOWED_COLUMNS))}
-      - Si el usuario pide ranking (ej: "¿Qué alimento tiene más hierro?") devolvé ORDER BY iron DESC LIMIT 1, 
-        **excluyendo los valores nulos con WHERE iron IS NOT NULL.**
-      - Si el usuario pide "menos de 300 kcal" usá energ_kcal <= 300.
-      - Si no mencionás columnas, devolvé todas las columnas (SELECT *).
-      - Respetá el parámetro max_results sugerido: {max_results}
+    - Usá sólo la tabla `alimentos`.
+    - Permitidos: SELECT, FROM, WHERE, ORDER BY, GROUP BY, HAVING, LIMIT.
+    - Prohibido: DROP, DELETE, UPDATE, INSERT, ALTER, TRUNCATE, CREATE, etc.
+    - Siempre devolvé **todas las columnas** con `SELECT *`.
+    - Si el usuario pide ranking (ej: "¿Qué alimento tiene más hierro?") devolvé 
+        `SELECT * FROM alimentos WHERE iron IS NOT NULL ORDER BY iron DESC LIMIT 1`.
+    - Si el usuario pide "menos de 300 kcal" usá `energ_kcal <= 300`.
+    - Respetá el parámetro max_results sugerido: {max_results}
     Ejemplos:
-      Entrada: "Dame alimentos altos en proteína y bajos en grasa"
-      Salida: SELECT codigomex2, nombre_del_alimento, protein, lipid_tot FROM alimentos WHERE protein >= 10 AND lipid_tot <= 10 ORDER BY protein DESC LIMIT {max_results}
-      Entrada: "¿Qué alimento tiene más hierro?"
-      Salida: SELECT codigomex2, nombre_del_alimento, iron FROM alimentos ORDER BY iron DESC LIMIT 1
+    Entrada: "Dame alimentos altos en proteína y bajos en grasa"
+    Salida: SELECT * FROM alimentos WHERE protein >= 10 AND lipid_tot <= 10 ORDER BY protein DESC LIMIT {max_results}
+    Entrada: "¿Qué alimento tiene más hierro?"
+    Salida: SELECT * FROM alimentos WHERE iron IS NOT NULL ORDER BY iron DESC LIMIT 1
 
     Traducí SOLO la siguiente pregunta a SQL:
     \"\"\"{question}\"\"\"
     """
+
 
     try:
         import threading
