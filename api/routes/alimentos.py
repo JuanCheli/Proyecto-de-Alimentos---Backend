@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from typing import List
 from api.schemas.alimento_schema import AlimentoCreate, AlimentoRead, AlimentoFilter
 from api.services.alimento_service import (
@@ -6,6 +6,7 @@ from api.services.alimento_service import (
     create_alimento,
     find_alimento,
     search_alimentos_db,
+    search_alimentos_nombre
 )
 
 router = APIRouter(tags=["alimentos"])
@@ -33,6 +34,17 @@ def read_alimento(codigo: int):
 
     return item
 
+
+@router.get("/buscar_alimento")
+def buscar_alimentos_por_nombre(
+    nombre: str = Query(..., description="Texto parcial del nombre del alimento"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    try:
+        return search_alimentos_nombre(nombre, limit=limit, offset=offset)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error en búsqueda: {str(e)}")
 
 
 

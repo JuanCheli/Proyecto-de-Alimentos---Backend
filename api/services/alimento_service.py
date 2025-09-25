@@ -4,6 +4,7 @@ from api.db.repositories.alimento_repo import (
     get_by_codigo,
     insert_alimento,
     search_alimentos,
+    search_by_nombre,
 )
 from api.schemas.alimento_schema import AlimentoCreate
 
@@ -21,3 +22,6 @@ def find_alimento(codigo: int):
 
 def search_alimentos_db(filters: Dict[str, Any], limit: int = 100, offset: int = 0):
     return search_alimentos(filters=filters, limit=limit, offset=offset)
+
+def search_alimentos_nombre(nombre: str, limit: int = 50, offset: int = 0):
+    return search_by_nombre(nombre=nombre, limit=limit, offset=offset)

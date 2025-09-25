@@ -31,6 +31,23 @@ def get_by_codigos(codigos: List[int]) -> List[dict]:
     return resp.data or []
 
 
+def search_by_nombre(nombre: str, limit: int = 50, offset: int = 0) -> List[dict]:
+    """
+    Busca alimentos cuyo nombre_del_alimento contenga el texto (esto, para que hacer recetas en el front sea mas facil).
+    Ej: "ALGOD" -> "ACEITE DE ALGODON"
+    """
+    resp = (
+        supabase.table(TABLE)
+        .select("*")
+        .ilike("nombre_del_alimento", f"%{nombre}%")
+        .limit(limit)
+        .offset(offset)
+        .execute()
+    )
+    return resp.data or []
+
+
+
 def insert_alimento(obj: dict) -> dict:
     resp = supabase.table(TABLE).insert(obj).execute()
     return resp.data[0] if resp.data else None
